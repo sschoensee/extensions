@@ -6,7 +6,7 @@ import * as Navigator from '@framework/Navigator'
 import * as Finder from '@framework/Finder'
 import { Lite, Entity, EntityPack, toLite, ModifiableEntity, toMList } from '@framework/Signum.Entities'
 import { EntityOperationSettings } from '@framework/Operations'
-import { Type, isTypeEntity } from '@framework/Reflection'
+import { Type, isTypeEntity, QueryTokenString } from '@framework/Reflection'
 import * as Operations from '@framework/Operations'
 import * as Constructor from '@framework/Constructor'
 import { WordTemplateEntity, WordTemplateOperation, SystemWordTemplateEntity, WordTemplateVisibleOn } from './Signum.Entities.Word'
@@ -23,13 +23,14 @@ import { DropdownItem } from '@framework/Components';
 import * as DynamicClientOptions from '../Dynamic/DynamicClientOptions';
 
 export function start(options: { routes: JSX.Element[], contextual: boolean, queryButton: boolean, entityButton: boolean }) {
+
   DynamicClientOptions.Options.checkEvalFindOptions.push({ queryName: WordTemplateEntity });
   register(QueryModel, {
     createFromTemplate: wt => Navigator.view(QueryModel.New({ queryKey: wt.query!.key })),
     createFromEntities: (wt, lites) => {
       return Navigator.API.fetchAndForget(wt).then(template => QueryModel.New({
         queryKey: template.query!.key,
-        filters: [{ token: "Entity", operation: "IsIn", value: lites }],
+        filters: [{ token: QueryTokenString.entity().toString(), operation: "IsIn", value: lites }],
         orders: [],
         pagination: { mode: "All" },
       }));
@@ -87,7 +88,7 @@ export function start(options: { routes: JSX.Element[], contextual: boolean, que
   if (options.queryButton)
     Finder.ButtonBarQuery.onButtonBarElements.push(ctx => {
 
-      if (!ctx.searchControl.props.showBarExtension)
+      if (!ctx.searchControl.props.showBarExtension || !Navigator.isViewable(WordTemplateEntity))
         return undefined;
 
       return <WordSearchMenu searchControl={ctx.searchControl} />;
@@ -99,7 +100,8 @@ export function start(options: { routes: JSX.Element[], contextual: boolean, que
 }
 
 export function getEntityWordButtons(ctx: ButtonsContext): Array<React.ReactElement<any> | undefined> | undefined {
-  if (ctx.pack.wordTemplates && ctx.pack.wordTemplates.length > 0)
+
+  if (Navigator.isViewable(WordTemplateEntity) && ctx.pack.wordTemplates && ctx.pack.wordTemplates.length > 0)
     return [<WordEntityMenu entityPack={ctx.pack as EntityPack<Entity>} />]
 
   return undefined;
@@ -118,7 +120,8 @@ export function register<T extends ModifiableEntity>(type: Type<T>, setting: Wor
 }
 
 export function getWordTemplates(ctx: ContextualItemsContext<Entity>): Promise<MenuItemBlock | undefined> | undefined {
-  if (ctx.lites.length == 0)
+
+  if (!Navigator.isViewable(WordTemplateEntity) || ctx.lites.length == 0)
     return undefined;
 
   return API.getWordTemplates(ctx.queryDescription.queryKey, ctx.lites.length > 1 ? "Multiple" : "Single", { lite: (ctx.lites.length == 1 ? ctx.lites[0] : null) })

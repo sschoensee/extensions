@@ -1,12 +1,13 @@
-﻿import * as React from 'react'
+import * as React from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import * as Finder from '@framework/Finder'
 import { Lite } from '@framework/Signum.Entities'
 import * as Navigator from '@framework/Navigator'
 import SearchControlLoaded from '@framework/SearchControl/SearchControlLoaded'
-import { ExcelReportEntity, ExcelMessage } from './Signum.Entities.Excel'
+import { ExcelReportEntity, ExcelMessage, ExcelReportOperation } from './Signum.Entities.Excel'
 import * as ExcelClient from './ExcelClient'
 import { DropdownMenu, DropdownToggle, Dropdown, DropdownItem } from '@framework/Components';
+import * as Operations from '@framework/Operations';
 
 export interface ExcelMenuProps {
   searchControl: SearchControlLoaded;
@@ -52,7 +53,7 @@ export default class ExcelMenu extends React.Component<ExcelMenuProps, { excelRe
   }
 
   handleAdmnister = () => {
-    Finder.explore({ queryName: ExcelReportEntity, parentToken: "Query.Key", parentValue: this.props.searchControl.props.findOptions.queryKey })
+    Finder.explore({ queryName: ExcelReportEntity, parentToken: ExcelReportEntity.token(a => a.query!.key), parentValue: this.props.searchControl.props.findOptions.queryKey })
       .then(() => this.reloadList())
       .done();
   }
@@ -81,8 +82,8 @@ export default class ExcelMenu extends React.Component<ExcelMenuProps, { excelRe
               </DropdownItem>)
           }
           {(this.props.plainExcel || excelReports && excelReports.length > 0) && <DropdownItem divider />}
-          <DropdownItem onClick={this.handleAdmnister}>{ExcelMessage.Administer.niceToString()}</DropdownItem>
-          <DropdownItem onClick={this.handleCreate}>{ExcelMessage.CreateNew.niceToString()}</DropdownItem>
+          {Operations.isOperationAllowed(ExcelReportOperation.Save, ExcelReportEntity) && <DropdownItem onClick={this.handleAdmnister}>{ExcelMessage.Administer.niceToString()}</DropdownItem>}
+          {Operations.isOperationAllowed(ExcelReportOperation.Save, ExcelReportEntity) && <DropdownItem onClick={this.handleCreate}>{ExcelMessage.CreateNew.niceToString()}</DropdownItem>}
         </DropdownMenu>
       </Dropdown>
     );

@@ -1,54 +1,13 @@
 import * as d3 from "d3"
 import * as moment from "moment"
 import * as d3sc from "d3-scale-chromatic";
-import { ChartTable, ChartColumn, ChartRow } from "../ChartClient"
+import { ChartTable, ChartColumn, ChartRow } from "../../ChartClient"
 import { parseLite } from "@framework/Signum.Entities"
 import * as Navigator from '@framework/Navigator'
-import { coalesce, Dic } from "../../../../Framework/Signum.React/Scripts/Globals";
+import { coalesce, Dic } from "@framework/Globals";
 import { getTypeInfo } from "@framework/Reflection";
 
-export function getNavigateRoute(liteData: string) {
-  var lite = parseLite(liteData);
-  return Navigator.navigateRoute(lite);
-}
 
-export function navigateEntity(liteData: string) {
-  var lite = parseLite(liteData);
-  window.open(Navigator.navigateRoute(lite));
-}
-
-((d3.select(document) as any).__proto__ as d3.Selection<any, any, any, any>).enterData = function (this: d3.Selection<any, any, any, any>, data: any, tag: string, cssClass: string) {
-  return this.selectAll(tag + "." + cssClass).data(data)
-    .enter().append("svg:" + tag)
-    .attr("class", cssClass);
-};
-
-declare module "d3-selection" {
-  interface Selection<GElement extends d3.BaseType, Datum, PElement extends d3.BaseType, PDatum> {
-    enterData<NElement extends d3.BaseType, NDatum = NDatum>(data: NDatum[], tag: string, cssClass: string): Selection<NElement, NDatum, GElement, Datum>;
-    enterData<NElement extends d3.BaseType, NDatum = NDatum>(data: (data: Datum) => NDatum[], tag: string, cssClass: string): Selection<NElement, NDatum, GElement, Datum>;
-  }
-}
-
-export function ellipsis(elem: SVGTextElement, width: number, padding?: number, ellipsisSymbol?: string) {
-
-  if (ellipsisSymbol == undefined)
-    ellipsisSymbol = '…';
-
-  if (padding)
-    width -= padding * 2;
-
-  const self = d3.select(elem);
-  let textLength = (<any>self.node()).getComputedTextLength();
-  let text = self.text();
-  while (textLength > width && text.length > 0) {
-    text = text.slice(0, -1);
-    while (text[text.length - 1] == ' ' && text.length > 0)
-      text = text.slice(0, -1);
-    self.text(text + ellipsisSymbol);
-    textLength = (<any>self.node()).getComputedTextLength();
-  }
-}
 
 export function translate(x: number, y: number) {
   if (y == undefined)
@@ -124,9 +83,9 @@ export function scaleFor(column: ChartColumn<any>, values: number[], minRange: n
   throw Error("Unexpected scale: " + scaleName);
 }
 
-export function insertPoint(column: ChartColumn<any>, valueColumn: ChartColumn<any>) : "Middle" | "Before" | "After" {
+export function insertPoint(keyColumn: ChartColumn<any>, valueColumn: ChartColumn<any>) : "Middle" | "Before" | "After" {
 
-  if ((valueColumn.orderByIndex || 0) > (column.orderByIndex || 0)) {
+  if (valueColumn.orderByIndex != null && (keyColumn.orderByIndex == null || valueColumn.orderByIndex < keyColumn.orderByIndex)) {
     if (valueColumn.orderByType == "Ascending")
       return "Before";
     else
@@ -187,7 +146,17 @@ export function completeValues(column: ChartColumn<unknown>, values: unknown[], 
 
   if (column.type == "Enum") {
 
-    var allValues = Dic.getValues(getTypeInfo(column.token!.type.name).members).filter(a => !a.isIgnoredEnum).map(a => a.name);
+    var typeName = column.token!.type.name; 
+    
+    if (typeName == "boolean") {
+      return complete(values, [false, true], column, insertPoint);
+    }
+
+    var typeInfo = getTypeInfo(column.token!.type.name);
+    if (typeInfo == null)
+      throw new Error("No Metadata found for " + typeName);
+
+    var allValues = Dic.getValues(typeInfo.members).filter(a => !a.isIgnoredEnum).map(a => a.name);
 
     return complete(values, allValues, column, insertPoint);
   }
@@ -240,12 +209,12 @@ export function completeValues(column: ChartColumn<unknown>, values: unknown[], 
 function complete(values: unknown[], allValues: unknown[], column: ChartColumn<unknown>, insertPoint: "Middle" | "Before" | "After"): any[] {
   
   if (insertPoint == "Middle") {
-    
+
     const allValuesDic = allValues.toObject(column.getKey);
     
     var oldValues = values.filter(a => !allValuesDic.hasOwnProperty(column.getKey(a)));
 
-    return [...allValues, ...oldValues];
+    return [...column.orderByType == "Descending" ? allValues.reverse() : allValues, ...oldValues];
   }
   else {
     const valuesDic = values.toObject(column.getKey);
@@ -260,138 +229,6 @@ function complete(values: unknown[], allValues: unknown[], column: ChartColumn<u
 
   throw new Error();
 }
-
-export function rule(object: any, totalSize?: number): Rule {
-  return new Rule(object, totalSize);
-}
-
-export class Rule {
-
-  private sizes: { [key: string]: number } = {};
-  private starts: { [key: string]: number } = {};
-  private ends: { [key: string]: number } = {};
-
-  totalSize: number;
-
-  constructor(object: any, totalSize?: number) {
-
-    let fixed = 0;
-    let proportional = 0;
-    for (const p in object) {
-      const value = object[p];
-      if (typeof value === 'number')
-        fixed += value;
-      else if (Rule.isStar(value))
-        proportional += Rule.getStar(value);
-      else
-        throw new Error("values should be numbers or *");
-    }
-
-    if (!totalSize) {
-      if (proportional)
-        throw new Error("totalSize is mandatory if * is used");
-
-      totalSize = fixed;
-    }
-
-    this.totalSize = totalSize;
-
-    const remaining = totalSize - fixed;
-    const star = proportional <= 0 ? 0 : remaining / proportional;
-
-    for (const p in object) {
-      const value = object[p];
-      if (typeof value === 'number')
-        this.sizes[p] = value;
-      else if (Rule.isStar(value))
-        this.sizes[p] = Rule.getStar(value) * star;
-    }
-
-    let acum = 0;
-
-    for (const p in this.sizes) {
-      this.starts[p] = acum;
-      acum += this.sizes[p];
-      this.ends[p] = acum;
-    }
-  }
-
-  static isStar(val: string) {
-    return typeof val === 'string' && val[val.length - 1] == '*';
-  }
-
-  static getStar(val: string) {
-    if (val === '*')
-      return 1;
-
-    return parseFloat(val.substring(0, val.length - 1));
-  }
-
-
-  size(name: string) {
-    return this.sizes[name];
-  }
-
-  start(name: string) {
-    return this.starts[name];
-  }
-
-  end(name: string) {
-    return this.ends[name];
-  }
-
-  middle(name: string) {
-    return this.starts[name] + this.sizes[name] / 2;
-  }
-
-  debugX(chart: d3.Selection<any, any, any, any>) {
-
-    const keys = d3.keys(this.sizes);
-
-    //paint x-axis rule
-    chart.append('svg:g').attr('class', 'x-rule-tick')
-      .enterData(keys, 'line', 'x-rule-tick')
-      .attr('x1', d => this.ends[d])
-      .attr('x2', d => this.ends[d])
-      .attr('y1', 0)
-      .attr('y2', 10000)
-      .style('stroke-width', 2)
-      .style('stroke', 'Pink');
-
-    //paint y-axis rule labels
-    chart.append('svg:g').attr('class', 'x-axis-rule-label')
-      .enterData(keys, 'text', 'x-axis-rule-label')
-      .attr('transform', (d, i) => {
-        return translate(this.starts[d] + this.sizes[d] / 2 - 5, 10 + 100 * (i % 3)) +
-          rotate(90);
-      })
-      .attr('fill', 'DeepPink')
-      .text(d => d);
-  }
-
-  debugY(chart: d3.Selection<any, any, any, any>) {
-
-    const keys = d3.keys(this.sizes);
-
-    //paint y-axis rule
-    chart.append('svg:g').attr('class', 'y-rule-tick')
-      .enterData(keys, 'line', 'y-rule-tick')
-      .attr('x1', 0)
-      .attr('x2', 10000)
-      .attr('y1', d => this.ends[d])
-      .attr('y2', d => this.ends[d])
-      .style('stroke-width', 2)
-      .style('stroke', 'Violet');
-
-    //paint y-axis rule labels
-    chart.append('svg:g').attr('class', 'y-axis-rule-label')
-      .enterData(keys, 'text', 'y-axis-rule-label')
-      .attr('transform', (d, i) => translate(100 * (i % 3), this.starts[d] + this.sizes[d] / 2 + 4))
-      .attr('fill', 'DarkViolet')
-      .text(d => d);
-  }
-}
-
 
 export function getStackOffset(curveName: string): ((series: d3.Series<any, any>, order: number[]) => void) | undefined {
   switch (curveName) {
@@ -511,195 +348,40 @@ export function getColorScheme(schemeName: string | null | undefined, k: number 
   return undefined;
 }
 
+interface CachedColorOrdinal {
+  category: string;
+  categorySteps: number;
+  scale: d3.ScaleOrdinal<string, string>;
+}
 
+export function colorCategory(parameters: { [name: string]: string }, domain: string[]): d3.ScaleOrdinal<string, string> {
 
-export function stratifyTokens(
-  data: ChartTable,
-  keyColumn: ChartColumn<unknown>, /*Employee*/
-  keyColumnParent?: ChartColumn<unknown>, /*Employee.ReportsTo*/):
-  d3.HierarchyNode<ChartRow | Folder | Root> {
+  const cacheKey = "_cachedColorOrdinal_"; 
 
+  var category = parameters["ColorCategory"];
+  var categorySteps = parseInt(parameters["ColorCategorySteps"]);
+  if (parameters[cacheKey]) {
+    const cached = parameters[cacheKey] as any as CachedColorOrdinal;
 
-  const folders = data.rows
-    .filter(r => keyColumnParent != null && keyColumnParent.getValue(r) != null)
-    .map(r => ({ folder: keyColumnParent!.getValue(r) }) as Folder)
-    .toObjectDistinct(r => keyColumnParent!.getKey(r.folder));
-
-  const root: Root = { isRoot: true };
-
-  const NullConst = "- Null -";
-
-
-  const dic = data.rows.filter(r => keyColumn.getValue(r) != null).toObjectDistinct(r => keyColumn.getValueKey(r));
-
-  const getParent = (d: ChartRow | Folder | Root) => {
-    if ((d as Root).isRoot)
-      return null;
-
-    if ((d as Folder).folder) {
-      const r = dic[keyColumnParent!.getKey((d as Folder).folder)];
-
-      if (!r)
-        return root;
-
-      const parentValue = keyColumnParent!.getValue(r);
-      if (parentValue == null)
-        return root;  //Either null
-
-      return folders[keyColumnParent!.getKey(parentValue)]; // Parent folder
+    if (cached.category == category && cached.categorySteps == categorySteps) {
+      domain.forEach(a => cached.scale(a));
+      return cached.scale;
     }
-
-    var keyVal = keyColumn.getValue(d as ChartRow);
-
-    if (keyVal) {
-      const r = d as ChartRow;
-
-      var fold = folders[keyColumn.getKey(keyVal)];
-      if (fold)
-        return fold; //My folder
-
-      if (keyColumnParent) {
-
-        const parentValue = keyColumnParent.getValue(r);
-
-        const parentFolder = parentValue && folders[keyColumnParent.getKey(parentValue)];
-
-        if (parentFolder)
-          return folders[keyColumnParent.getKey(parentFolder.folder)]; //only parent
-      }
-
-      return root; //No key an no parent
-    }
-
-    throw new Error("Unexpected " + JSON.stringify(d))
-  };
-
-  var getKey = (r: ChartRow | Folder | Root) => {
-
-    if ((r as Root).isRoot)
-      return "#Root";
-
-    if ((r as Folder).folder)
-      return "F#" + keyColumnParent!.getKey((r as Folder).folder);
-
-    const cr = (r as ChartRow);
-
-    if (keyColumn.getValue(cr) != null)
-      return keyColumn.getKey(cr);
-
-    return NullConst;
   }
 
-  var rootNode = d3.stratify<ChartRow | Folder | Root>()
-    .id(getKey)
-    .parentId(r => {
-      var parent = getParent(r);
-      return parent ? getKey(parent) : null
-    })([root, ...Object.values(folders), ...data.rows]);
+  var scheme = getColorScheme(category, categorySteps);
 
-  return rootNode
-
-}
-
-export interface Folder {
-  folder: unknown;
-}
-
-export function isFolder(obj: any): obj is Folder {
-  return (obj as Folder).folder !== undefined;
-}
-
-export interface Root {
-  isRoot: true;
-}
-
-export function isRoot(obj: any): obj is Root {
-  return (obj as Root).isRoot;
-}
-
-
-export function toPivotTable(data: ChartTable,
-  col0: ChartColumn<unknown>, /*Employee*/
-  usedCols: ChartColumn<number>[]): PivotTable {
-
-  var rows = data.rows
-    .map((r) => ({
-      rowValue: col0.getValue(r),
-      values: usedCols.toObject(cn => cn.name, (cn): PivotValue => ({
-        rowClick: r,
-        value: cn.getValue(r),
-        valueTitle: `${col0.getValueNiceName(r)}, ${cn.title}: ${cn.getValueNiceName(r)}`
-      }))
-    } as PivotRow));
-
-  var title = usedCols.map(c => c.title).join(" | ");
-
-  return {
-    title,
-    columns: d3.values(usedCols.toObject(c => c.name, c => ({
-      color: null,
-      key: c.name,
-      niceName: c.title,
-    } as PivotColumn))),
-    rows,
+  const newCached: CachedColorOrdinal = {
+    category: category,
+    categorySteps: categorySteps,
+    scale: d3.scaleOrdinal(scheme).domain(domain),
   };
+
+  parameters[cacheKey] = newCached as any;
+
+  return newCached.scale;
 }
 
-export function groupedPivotTable(data: ChartTable,
-  col0: ChartColumn<unknown>, /*Employee*/
-  colSplit: ChartColumn<unknown>,
-  colValue: ChartColumn<number>): PivotTable {
 
-  var columns = d3.values(data.rows.map(r => colSplit.getValue(r)).toObjectDistinct(v => colSplit.getKey(v), v => ({
-    niceName: colSplit.getNiceName(v),
-    color: colSplit.getColor(v),
-    key: colSplit.getKey(v),
-  }) as PivotColumn));
 
-  var rows = data.rows.groupBy(r => "k" + col0.getValueKey(r))
-    .map(gr => {
 
-      var rowValue = col0.getValue(gr.elements[0]);
-      return {
-        rowValue: rowValue,
-        values: gr.elements.toObject(
-          r => colSplit.getValueKey(r),
-          (r): PivotValue => ({
-            value: colValue.getValue(r),
-            rowClick: r,
-            valueTitle: `${col0.getNiceName(rowValue)}, ${colSplit.getValueNiceName(r)}: ${colValue.getValueNiceName(r)}`
-          })),
-      } as PivotRow;
-    });
-
-  var title = data.columns.c2!.title + " / " + data.columns.c1!.title;
-
-  return {
-    title,
-    columns,
-    rows,
-  } as PivotTable;
-}
-
-export interface PivotTable {
-  title: string;
-  columns: PivotColumn[];
-  rows: PivotRow[];
-}
-
-export interface PivotColumn {
-  key: string;
-  color?: string | null;
-  niceName?: string | null;
-}
-
-export interface PivotRow {
-  rowValue: unknown;
-  values: { [key: string /*| number*/]: PivotValue };
-}
-
-export interface PivotValue {
-  rowClick: ChartRow;
-  value: number;
-  valueTitle: string;
-}

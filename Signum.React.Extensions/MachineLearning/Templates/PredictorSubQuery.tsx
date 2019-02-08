@@ -1,4 +1,4 @@
-﻿import * as React from 'react'
+import * as React from 'react'
 import { ValueLine, EntityLine, EntityTable } from '@framework/Lines'
 import { FindOptions, ColumnOption } from '@framework/Search'
 import { TypeContext } from '@framework/TypeContext'
@@ -13,6 +13,7 @@ import { QueryDescription, SubTokensOptions } from '@framework/FindOptions'
 import { initializeColumn } from './Predictor';
 import { newMListElement } from '@framework/Signum.Entities';
 import { is } from '@framework/Signum.Entities';
+import { QueryTokenString } from '@framework/Reflection';
 
 export default class PredictorSubQuery extends React.Component<{ ctx: TypeContext<PredictorSubQueryEntity>, mainQuery: PredictorMainQueryEmbedded, mainQueryDescription: QueryDescription }> {
 
@@ -34,20 +35,13 @@ export default class PredictorSubQuery extends React.Component<{ ctx: TypeContex
         queryKey: sqd.queryKey,
         canAggregate: true,
         entity: undefined,
-        filters: (this.getMainFilters() || []).concat(sq.filters).map(mle => mle.element).map(f => ({
-          indentation: f.indentation,
-          isGroup: f.isGroup,
-          operation: f.operation,
-          groupOperation: f.groupOperation,
-          tokenString: f.token && f.token.tokenString,
-          valueString: f.valueString,
-        }) as UserAssetsClient.API.ParseFilterRequest)
+        filters: (this.getMainFilters() || []).concat(sq.filters).map(mle => UserAssetsClient.Converter.toQueryFilterItem(mle.element))
       }).then(filters => {
         var fo: FindOptions = {
           queryName: sq.query!.key,
           groupResults: true,
           filterOptions: filters.map(f => UserAssetsClient.Converter.toFilterOption(f)),
-          columnOptions: [{ token: "Count" } as ColumnOption]
+          columnOptions: [{ token: QueryTokenString.count() } as ColumnOption]
             .concat(sq.columns.map(mle => ({ token: mle.element.token && mle.element.token.tokenString, } as ColumnOption))),
           columnOptionsMode: "Replace",
         };
@@ -125,12 +119,14 @@ export default class PredictorSubQuery extends React.Component<{ ctx: TypeContex
 
     return (
       <div>
-        <ValueLine ctx={ctx.subCtx(f => f.name)} onTextboxBlur={() => parentCtx.frame!.entityComponent!.forceUpdate()} />
+        <ValueLine ctx={ctx.subCtx(f => f.name)} valueHtmlAttributes={{ onBlur: () => parentCtx.frame!.entityComponent!.forceUpdate() }} />
         <EntityLine ctx={ctx.subCtx(f => f.query)} remove={ctx.value.isNew} onChange={this.handleOnChange} />
         {queryKey &&
           <div>
-            <FilterBuilderEmbedded ctx={ctxxs.subCtx(a => a.filters)} queryKey={queryKey}
-              subTokenOptions={SubTokensOptions.CanAnyAll | SubTokensOptions.CanElement | SubTokensOptions.CanAggregate} />
+          <FilterBuilderEmbedded ctx={ctxxs.subCtx(a => a.filters)} queryKey={queryKey}
+            subTokenOptions={SubTokensOptions.CanAnyAll | SubTokensOptions.CanElement | SubTokensOptions.CanAggregate}
+            showUserFilters={false}
+            />
             <EntityTable ctx={ctxxs.subCtx(e => e.columns)} columns={EntityTable.typedColumns<PredictorSubQueryColumnEmbedded>([
               {
                 property: a => a.usage, template: colCtx => <ValueLine ctx={colCtx.subCtx(a => a.usage)} onChange={() => this.handleChangeUsage(colCtx)} />

@@ -1,4 +1,4 @@
-﻿import * as React from 'react'
+import * as React from 'react'
 import * as OrderUtils from '@framework/Frames/OrderUtils'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { Tab, UncontrolledTabs } from '@framework/Components/Tabs'
@@ -214,7 +214,8 @@ export default class Predictor extends React.Component<{ ctx: TypeContext<Predic
 
                   <FilterBuilderEmbedded ctx={ctxmq.subCtx(a => a.filters)}
                     queryKey={queryKey}
-                    subTokenOptions={SubTokensOptions.CanAnyAll | SubTokensOptions.CanElement | canAggregate} />
+                    subTokenOptions={SubTokensOptions.CanAnyAll | SubTokensOptions.CanElement | canAggregate}
+                    showUserFilters={false} />
                   <EntityTable ctx={ctxmq.subCtx(e => e.columns)} columns={EntityTable.typedColumns<PredictorColumnEmbedded>([
                     { property: a => a.usage },
                     {
@@ -248,13 +249,13 @@ export default class Predictor extends React.Component<{ ctx: TypeContext<Predic
           </Tab>
           {
             ctx.value.state != "Draft" && <Tab eventKey="codifications" title={PredictorMessage.Codifications.niceToString()}>
-              <SearchControl findOptions={{ queryName: PredictorCodificationEntity, parentToken: "Predictor", parentValue: ctx.value }} />
+              <SearchControl findOptions={{ queryName: PredictorCodificationEntity, parentToken: PredictorCodificationEntity.token(e => e.predictor), parentValue: ctx.value }} />
             </Tab>
           }
           {
             ctx.value.state != "Draft" && <Tab eventKey="progress" title={PredictorMessage.Progress.niceToString()}>
               {ctx.value.state == "Trained" && <EpochProgressComponent ctx={ctx} />}
-              <SearchControl findOptions={{ queryName: PredictorEpochProgressEntity, parentToken: "Predictor", parentValue: ctx.value }} />
+              <SearchControl findOptions={{ queryName: PredictorEpochProgressEntity, parentToken: PredictorEpochProgressEntity.token(e => e.predictor), parentValue: ctx.value }} />
             </Tab>
           }
           {
@@ -403,8 +404,8 @@ function getSeries(eps: Array<PredictorClient.EpochProgress>, predictor: Predict
 
   const nns = NeuralNetworkSettingsEntity.isInstance(algSet) ? algSet : undefined;
 
-  var maxLoss = eps.flatMap(a => [a.lossTraining, a.lossValidation]).filter(a => a != null).max();
-  var maxEvaluation = eps.flatMap(a => [a.evaluationTraining, a.evaluationValidation]).filter(a => a != null).max();
+  var maxLoss = eps.flatMap(a => [a.lossTraining, a.lossValidation]).max()!;
+  var maxEvaluation = eps.flatMap(a => [a.evaluationTraining, a.evaluationValidation]).max()!;
 
   return [
     {

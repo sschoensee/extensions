@@ -8,6 +8,7 @@ import { ChartRequestModel } from '../../Chart/Signum.Entities.Chart'
 import ChartRenderer from '../../Chart/Templates/ChartRenderer'
 import ChartTableComponent from '../../Chart/Templates/ChartTable'
 import { UserChartPartEntity } from '../Signum.Entities.Dashboard'
+import PinnedFilterBuilder from '../../../../Framework/Signum.React/Scripts/SearchControl/PinnedFilterBuilder';
 
 export interface UserChartPartProps {
   part: UserChartPartEntity
@@ -17,6 +18,7 @@ export interface UserChartPartProps {
 export interface UserChartPartState {
   chartRequest?: ChartRequestModel;
   result?: ChartClient.API.ExecuteChartResult;
+  loading: boolean;
   error?: any;
   showData?: boolean;
 }
@@ -24,7 +26,7 @@ export interface UserChartPartState {
 export default class UserChartPart extends React.Component<UserChartPartProps, UserChartPartState> {
   constructor(props: UserChartPartProps) {
     super(props);
-    this.state = { showData: props.part.showData };
+    this.state = { showData: props.part.showData, loading: false };
   }
 
   componentWillMount() {
@@ -43,17 +45,16 @@ export default class UserChartPart extends React.Component<UserChartPartProps, U
   loadChartRequest(props: UserChartPartProps) {
     this.setState({ chartRequest: undefined, result: undefined, error: undefined }, () =>
       UserChartClient.Converter.toChartRequest(props.part.userChart!, props.entity)
-        .then(cr => this.setState({ chartRequest: cr, result: undefined }, () => this.makeQuery()))
+        .then(cr => this.setState({ chartRequest: cr, result: undefined, error: undefined, loading: true }, () => this.makeQuery()))
         .done());
   }
 
   makeQuery() {
-    this.setState({ result: undefined, error: undefined }, () =>
-      ChartClient.getChartScript(this.state.chartRequest!.chartScript)
-        .then(cs => ChartClient.API.executeChart(this.state.chartRequest!, cs))
-        .then(rt => this.setState({ result: rt }))
-        .catch(e => { this.setState({ error: e }); })
-        .done());
+    ChartClient.getChartScript(this.state.chartRequest!.chartScript)
+      .then(cs => ChartClient.API.executeChart(this.state.chartRequest!, cs))
+      .then(rt => this.setState({ result: rt, loading: false, error: undefined }))
+      .catch(e => { this.setState({ error: e }); })
+      .done();
   }
 
   render() {
@@ -73,6 +74,7 @@ export default class UserChartPart extends React.Component<UserChartPartProps, U
 
     return (
       <div>
+        <PinnedFilterBuilder filterOptions={s.chartRequest.filterOptions} onFiltersChanged={() => this.makeQuery()} extraSmall={true} />
         {this.props.part.allowChangeShowData &&
           <label>
             <input type="checkbox" checked={this.state.showData} onChange={e => this.setState({ showData: e.currentTarget.checked })} />
@@ -81,7 +83,8 @@ export default class UserChartPart extends React.Component<UserChartPartProps, U
         {this.state.showData ?
           <ChartTableComponent chartRequest={s.chartRequest} lastChartRequest={s.chartRequest}
             resultTable={s.result.resultTable} onOrderChanged={() => this.makeQuery()} /> :
-          <ChartRenderer chartRequest={s.chartRequest} lastChartRequest={s.chartRequest} data={s.result.chartTable} />
+          <ChartRenderer chartRequest={s.chartRequest} lastChartRequest={s.chartRequest}
+            data={s.result.chartTable} loading={s.loading} />
         }
       </div>
     );

@@ -98,7 +98,7 @@ export class CaseActivityStatsComponent extends React.Component<CaseActivityStat
         <FormGroup ctx={ctx} labelText={WorkflowActivityEntity.nicePropertyName(a => a.estimatedDuration)}>{formatDuration(stats.estimatedDuration)}</FormGroup>
         <FormGroup ctx={ctx} labelText={WorkflowActivityMessage.AverageDuration.niceToString()}>{formatDuration(stats.averageDuration)}</FormGroup>
         <FormGroup ctx={ctx} labelText={CaseActivityEntity.nicePropertyName(a => a.duration)}>{formatDuration(stats.duration)}</FormGroup>
-        <FormGroup ctx={ctx} labelText={WorkflowActivityType.niceName()}>{WorkflowActivityType.niceToString(stats.workflowActivityType)}</FormGroup>
+        <FormGroup ctx={ctx} labelText={WorkflowActivityType.niceTypeName()}>{WorkflowActivityType.niceToString(stats.workflowActivityType)}</FormGroup>
         {
           stats.workflowActivityType == "Task" || stats.workflowActivityType == "Decision" ? this.renderTaskExtra() :
             stats.workflowActivityType == "Script" ? this.renderScriptTaskExtra() :
@@ -116,7 +116,7 @@ export class CaseActivityStatsComponent extends React.Component<CaseActivityStat
     return (
       <div>
         <h3>{CaseNotificationEntity.nicePluralName()}</h3>
-        <SearchControl findOptions={{ queryName: CaseNotificationEntity, parentToken: "CaseActivity", parentValue: stats.caseActivity }} />
+        <SearchControl findOptions={{ queryName: CaseNotificationEntity, parentToken: CaseNotificationEntity.token(e => e.caseActivity), parentValue: stats.caseActivity }} />
       </div>
     );
   }
@@ -127,7 +127,7 @@ export class CaseActivityStatsComponent extends React.Component<CaseActivityStat
     return (
       <div>
         <h3>{OperationLogEntity.nicePluralName()}</h3>
-        <SearchControl findOptions={{ queryName: OperationLogEntity, parentToken: "Target", parentValue: stats.caseActivity }} />
+        <SearchControl findOptions={{ queryName: OperationLogEntity, parentToken: OperationLogEntity.token(e => e.target), parentValue: stats.caseActivity }} />
       </div>
     );
   }
@@ -137,7 +137,7 @@ export class CaseActivityStatsComponent extends React.Component<CaseActivityStat
 
     Finder.find<CaseEntity>({
       queryName: CaseEntity,
-      filterOptions: [{ token: "Entity.ParentCase", value: this.props.caseEntity, frozen: true }]
+      filterOptions: [{ token: CaseEntity.token().entity(e => e.parentCase), value: this.props.caseEntity, frozen: true }]
     }, { autoSelectIfOne: true })
       .then(c => c && Navigator.navigate(c))
       .done();

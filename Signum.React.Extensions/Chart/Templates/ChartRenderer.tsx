@@ -3,7 +3,7 @@ import { DomUtils, Dic } from '@framework/Globals'
 import * as Finder from '@framework/Finder'
 import * as Navigator from '@framework/Navigator'
 import { parseLite, is } from '@framework/Signum.Entities'
-import { FilterOptionParsed, ColumnOption, hasAggregate } from '@framework/FindOptions'
+import { FilterOptionParsed, ColumnOption, hasAggregate, withoutAggregateAndPinned } from '@framework/FindOptions'
 import { ChartRequestModel } from '../Signum.Entities.Chart'
 import * as ChartClient from '../ChartClient'
 import { toFilterOptions } from '@framework/Finder';
@@ -13,17 +13,20 @@ import { ChartScript, chartScripts, ChartRow } from '../ChartClient';
 import { ErrorBoundary } from '@framework/Components';
 
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import ReactChart from '../D3Scripts/Components/ReactChart';
 
 
 export interface ChartRendererProps {
-  data: ChartClient.ChartTable;
   chartRequest: ChartRequestModel;
-  lastChartRequest: ChartRequestModel;
+  loading: boolean;
+  data?: ChartClient.ChartTable;
+  lastChartRequest?: ChartRequestModel;
 }
 
 export interface ChartRendererState {
   chartScript?: ChartScript;
-  chartComponent?: React.ComponentClass<{ data: ChartClient.ChartTable, onDrillDown: (e: ChartRow) => void }>;
+  parameters?: { [name: string]: string };
+  chartComponent?: (React.ComponentClass<ChartClient.ChartComponentProps>) | ((p: ChartClient.ChartScriptProps) => React.ReactNode);
 }
 
 
@@ -35,26 +38,33 @@ export default class ChartRenderer extends React.Component<ChartRendererProps, C
   }
 
   componentWillMount() {
-    this.requestAndRedraw().done();
+    this.requestAndRedraw(this.props).done();
   }
 
   componentWillReceiveProps(newProps: ChartRendererProps) {
-    this.requestAndRedraw().done();
+    if (this.state.chartScript == null || !is(this.state.chartScript.symbol, newProps.chartRequest.chartScript))
+      this.requestAndRedraw(newProps).done();
+    else {
+      if (this.state.chartScript) {
+        var newParams = ChartClient.API.getParameterWithDefault(newProps.chartRequest, this.state.chartScript);
+        var cleanParams = this.state.parameters && Dic.except(this.state.parameters, Dic.getKeys(this.state.parameters).filter(a => a.startsWith("_")));
+        if (!Dic.equals(cleanParams, newParams, false))
+          this.setState({ parameters: newParams, });
+      }
+    }
   }
 
-  async requestAndRedraw() {
+  async requestAndRedraw(newProps: ChartRendererProps) {
 
-    const chartScriptPromise = ChartClient.getChartScript(this.props.chartRequest.chartScript);
-    const chartComponentModulePromise = ChartClient.getRegisteredChartScriptComponent(this.props.chartRequest.chartScript);
+    const chartScriptPromise = ChartClient.getChartScript(newProps.chartRequest.chartScript);
+    const chartComponentModulePromise = ChartClient.getRegisteredChartScriptComponent(newProps.chartRequest.chartScript);
 
     const chartScript = await chartScriptPromise;
     const chartComponentModule = await chartComponentModulePromise();
 
+    const parameters = ChartClient.API.getParameterWithDefault(newProps.chartRequest, chartScript);
 
-    const data = this.props.data;
-    data.parameters = ChartClient.API.getParameterWithDefault(this.props.chartRequest, chartScript);
-
-    this.setState({ chartComponent: chartComponentModule.default, chartScript });
+    this.setState({ chartComponent: chartComponentModule.default, chartScript, parameters });
   }
 
 
@@ -65,7 +75,7 @@ export default class ChartRenderer extends React.Component<ChartRendererProps, C
     if (r.entity) {
       window.open(Navigator.navigateRoute(r.entity!));
     } else {
-      const filters = cr.filterOptions.filter(a => !hasAggregate(a.token));
+      const filters = cr.filterOptions.map(f => withoutAggregateAndPinned(f)!).filter(Boolean);
 
       const columns: ColumnOption[] = [];
 
@@ -105,7 +115,20 @@ export default class ChartRenderer extends React.Component<ChartRendererProps, C
     return (
       <FullscreenComponent>
         <ErrorBoundary>
-          {this.state.chartComponent && React.createElement(this.state.chartComponent, { data: this.props.data, onDrillDown: this.handleDrillDown })}
+          {this.state.chartComponent && this.state.parameters &&
+            (this.state.chartComponent.prototype instanceof React.Component ?
+              React.createElement(this.state.chartComponent as React.ComponentClass<ChartClient.ChartComponentProps>, {
+                data: this.props.data,
+                loading: this.props.loading,
+                onDrillDown: this.handleDrillDown,
+                parameters: this.state.parameters
+              }) :
+              <ReactChart data={this.props.data}
+                loading={this.props.loading}
+                onDrillDown={this.handleDrillDown}
+                parameters={this.state.parameters}
+                onRenderChart={this.state.chartComponent as ((p: ChartClient.ChartScriptProps) => React.ReactNode)} />)
+      }
         </ErrorBoundary>
       </FullscreenComponent>
     );
