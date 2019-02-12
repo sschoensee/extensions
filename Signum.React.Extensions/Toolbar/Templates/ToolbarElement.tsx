@@ -40,7 +40,7 @@ export default class ToolbarElement extends React.Component<{ ctx: TypeContext<T
     var content = ctx2.value.content;
 
     var icon = Dashboard.parseIcon(ctx4.value.iconName);
-
+    
     return (
       <div>
         <div className="row">
@@ -63,7 +63,7 @@ export default class ToolbarElement extends React.Component<{ ctx: TypeContext<T
             </div>
             <div className="col-sm-5">
             <ValueLine ctx={ctx2.subCtx(t => t.label)} valueHtmlAttributes={{ placeholder: content && content.toStr || undefined }} />
-            {(ctx2.value.type == "Header" || ctx2.value.type == "Item") && ctx2.value.content == null && <ValueLine ctx={ctx2.subCtx(t => t.url)} />}
+            {(ctx2.value.type == "Header" || ctx2.value.type == "Item") && (ctx2.value.content == null || PermissionSymbol.isLite(ctx2.value.content)) && <ValueLine ctx={ctx2.subCtx(t => t.url)} />}
               {content && (content.EntityType == "UserQuery" || content.EntityType == "Query") &&
                 <div>
                   <ValueLine ctx={ctx6.subCtx(t => t.openInPopup)} />
