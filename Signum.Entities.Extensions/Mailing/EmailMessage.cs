@@ -280,7 +280,7 @@ namespace Signum.Entities.Mailing
         protected override string? PropertyValidation(PropertyInfo pi)
         {
             if (pi.Name == nameof(EmailAddress) && !InvalidEmail && !EMailValidatorAttribute.EmailRegex.IsMatch(EmailAddress))
-                return ValidationMessage._0DoesNotHaveAValid1Format.NiceToString().FormatWith("{0}", pi.NiceName());
+                return ValidationMessage._0DoesNotHaveAValid1Format.NiceToString(EmailAddress, pi.NiceName()); //.FormatWith("{0}", EmailAddress);
 
 
             return base.PropertyValidation(pi);
